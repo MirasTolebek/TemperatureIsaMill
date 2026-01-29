@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Логгер Сменных Данных</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            touch-action: manipulation;
+            background-color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .input-cell {
+            transition: all 0.2s;
+        }
+        .input-cell:focus-within {
+            border-color: #3b82f6;
+            background-color: #fff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        input {
+            appearance: none;
+            -webkit-appearance: none;
+        }
+    </style>
+</head>
+<body class="p-4 pb-20">
+    <div id="app" class="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+        <!-- Вкладки -->
+        <div class="flex border-b bg-gray-50">
+            <button id="tab-up" onclick="switchTab('up')" class="flex-1 py-4 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition-all">
+                Подъемная ст.
+            </button>
+            <button id="tab-down" onclick="switchTab('down')" class="flex-1 py-4 text-center font-bold text-gray-400 transition-all">
+                Неподъемная ст.
+            </button>
+        </div>
+
+        <div class="p-4">
+            <div id="inputs-container" class="grid grid-cols-1 gap-2">
+                <!-- Инпуты генерируются здесь -->
+            </div>
+
+            <div class="mt-8 space-y-4">
+                <button onclick="copyToClipboard()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 text-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="C8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    Копировать результат
+                </button>
+                
+                <button onclick="resetData()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-500 font-semibold py-3 rounded-xl transition-colors">
+                    Сбросить текущую сторону
+                </button>
+            </div>
+        </div>
+
+        <!-- Уведомление -->
+        <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-8 py-3 rounded-full opacity-0 transition-opacity duration-300 shadow-2xl pointer-events-none z-50">
+            Текст скопирован!
+        </div>
+    </div>
+
+    <script>
+        let currentSide = 'up';
+        const data = {
+            up: Array(16).fill(''),
+            down: Array(16).fill('')
+        };
+
+        const titles = {
+            up: 'Подъемная ст',
+            down: 'Неподъемная ст'
+        };
+
+        function renderInputs() {
+            const container = document.getElementById('inputs-container');
+            container.innerHTML = '';
+            
+            const currentData = data[currentSide];
+            
+            currentData.forEach((value, index) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center gap-3 p-1 px-3 bg-gray-50 rounded-lg border border-gray-200 input-cell';
+                
+                div.innerHTML = `
+                    <span class="w-8 font-bold text-gray-400 text-right">${index + 1})</span>
+                    <input 
+                        type="text" 
+                        inputmode="decimal"
+                        id="input-${index}"
+                        value="${value}"
+                        placeholder="00,0"
+                        class="flex-1 bg-transparent py-3 text-xl font-semibold focus:outline-none text-gray-800"
+                        oninput="handleInput(event, ${index})"
+                        onkeydown="handleKeyDown(event, ${index})"
+                        autocomplete="off"
+                    >
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function handleInput(event, index) {
+            let input = event.target;
+            // Убираем всё кроме цифр
+            let rawVal = input.value.replace(/\D/g, '');
+            
+            if (rawVal.length >= 3) {
+                // Форматируем: 123 -> 12,3
+                let formatted = rawVal.substring(0, 2) + ',' + rawVal.substring(2, 3);
+                data[currentSide][index] = formatted;
+                input.value = formatted;
+                
+                // Переход к следующему полю
+                const nextInput = document.getElementById(`input-${index + 1}`);
+                if (nextInput) {
+                    nextInput.focus();
+                } else {
+                    input.blur();
+                }
+            } else {
+                data[currentSide][index] = rawVal;
+                input.value = rawVal;
+            }
+        }
+
+        function handleKeyDown(event, index) {
+            const input = event.target;
+            
+            // Если нажат Backspace
+            if (event.key === 'Backspace') {
+                // Если поле пустое и есть куда возвращаться
+                if (input.value === '' && index > 0) {
+                    event.preventDefault(); // Отменяем стандартное поведение
+                    const prevInput = document.getElementById(`input-${index - 1}`);
+                    if (prevInput) {
+                        // Переходим назад
+                        prevInput.focus();
+                        // Удаляем последний символ в предыдущем поле (цифру или запятую)
+                        let prevVal = data[currentSide][index - 1];
+                        if (prevVal.length > 0) {
+                            // Убираем последний символ. Если была запятая (XX,X), удалится X, потом запятая
+                            let newVal = prevVal.slice(0, -1);
+                            // Если осталась только цифра с запятой в конце, убираем и запятую
+                            if (newVal.endsWith(',')) {
+                                newVal = newVal.slice(0, -1);
+                            }
+                            data[currentSide][index - 1] = newVal;
+                            prevInput.value = newVal;
+                        }
+                    }
+                }
+            }
+        }
+
+        function switchTab(side) {
+            currentSide = side;
+            const upBtn = document.getElementById('tab-up');
+            const downBtn = document.getElementById('tab-down');
+            
+            if (side === 'up') {
+                upBtn.className = "flex-1 py-4 text-center font-bold text-blue-600 border-b-2 border-blue-600 bg-white transition-all";
+                downBtn.className = "flex-1 py-4 text-center font-bold text-gray-400 transition-all";
+            } else {
+                downBtn.className = "flex-1 py-4 text-center font-bold text-blue-600 border-b-2 border-blue-600 bg-white transition-all";
+                upBtn.className = "flex-1 py-4 text-center font-bold text-gray-400 transition-all";
+            }
+            renderInputs();
+        }
+
+        function copyToClipboard() {
+            const currentData = data[currentSide];
+            let text = titles[currentSide] + '\n';
+            
+            currentData.forEach((val, i) => {
+                // Если значение не введено, ставим прочерк или оставляем пустым
+                text += `${i + 1}) ${val || ''}\n`;
+            });
+
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            
+            showToast();
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.style.opacity = '1';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 2000);
+        }
+
+        function resetData() {
+            if (confirm('Очистить все данные на этой стороне?')) {
+                data[currentSide] = Array(16).fill('');
+                renderInputs();
+            }
+        }
+
+        window.onload = renderInputs;
+    </script>
+</body>
+</html>
